@@ -9,7 +9,7 @@ from rich.table import Table
 def get_all_mappings(this: set, other: set) -> set[frozendict]:
     return {
         frozendict({x: y for x, y in zip(this, image)})
-        for image in itertools.product(other, repeat=len(other))
+        for image in itertools.product(other, repeat=len(this))
     }
 
 
@@ -60,6 +60,19 @@ class PermutationGroup:
 
         return cls(underlying_set, permutations)
 
+    @classmethod
+    def from_generator(cls, generator: Permutation) -> "PermutationGroup":
+        underlying_set = set(generator.rule.keys())
+
+        permutations = {generator}
+        next_element = generator * generator
+
+        while next_element != generator:
+            permutations.add(next_element)
+            next_element *= generator
+
+        return cls(underlying_set, permutations)
+
     def multiplication_table(self, use_rich=False):
         table = [
             [p1] + [p1 * p2 for p2 in self.permutations] for p1 in self.permutations
@@ -85,11 +98,13 @@ class PermutationGroup:
 
         new_permutations: set[Permutation] = set()
 
-        for g in self.permutations:
-            for h in get_all_mappings(self.underlying_set, other.permutations):
+        for h in get_all_mappings(self.underlying_set, other.permutations):
+            print(h)
+            raise RuntimeError
+            for g in self.permutations:
                 new_permutation = Permutation(
                     {
-                        (*safe_unpack(x), y): (*safe_unpack(g(x)), y ** h[x])
+                        (*safe_unpack(x), y): (*safe_unpack(x ** g), y ** h[x])
                         for (x, y) in new_underling_set
                     }
                 )
@@ -99,18 +114,12 @@ class PermutationGroup:
 
         return PermutationGroup(new_underling_set, new_permutations)
 
-    def __rich__(self):
-        return {
-            "Underling Set": self.underlying_set,
-            "Permutations": self.permutations,
-        }
-
     def exponentiation(self, other: "PermutationGroup") -> "PermutationGroup":
-        new_underling_set = get_all_mappings(other.underlying_set, self.underlying_set)
+        new_underling_set = get_all_mappings(self.underlying_set, other.underlying_set)
         new_permutations: set[Permutation] = set()
 
-        for g in self.permutations:
-            for h in get_all_mappings(self.underlying_set, other.permutations):
+        for h in get_all_mappings(self.underlying_set, other.permutations):
+            for g in other.permutations:
                 new_permutation = Permutation(
                     {
                         mapping: frozendict(
@@ -125,8 +134,21 @@ class PermutationGroup:
 
 
 if __name__ == "__main__":
-    s3 = PermutationGroup.symmetric_group(set(range(3)))
+    z3 = PermutationGroup.from_generator(Permutation({0: 1, 1: 2, 2: 0}))
 
-    wr = s3.wreath_product(s3).wreath_product(s3)
-    # exponentiation = s3.exponentiation(s3)
-    print(wr)
+    print("Z3")
+    print(z3.underlying_set, z3.permutations)
+
+    # print("Z3 wr Z3")
+    # z3z3 = z3.wreath_product(z3)
+    # print(z3z3.underlying_set, len(z3z3.permutations))
+
+    # print("Z3 wr Z3 wr Z3")
+    # z3z3z3 = z3z3.wreath_product(z3)
+    # print(z3z3z3.underlying_set, len(z3z3z3.permutations))
+    # print("Z3 ^ Z3")
+    exponentiation = z3.exponentiation(z3)
+    print(exponentiation.underlying_set, len(exponentiation.permutations))
+
+    # wr = s3.wreath_product(s3)
+    # print(wr.underlying_set, len(wr.Permutation
