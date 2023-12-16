@@ -34,6 +34,12 @@ class Permutation:
             raise NotImplementedError
         return self.rule == other.rule
 
+    def inverse(self) -> "Permutation":
+        return Permutation({v: k for k, v in self.rule.items()}, self.group)
+
+    def is_conjugate(self, other: "Permutation") -> bool:
+        return self.inverse() * other * self == other
+
     def __hash__(self):
         return hash(self.rule)
 
@@ -259,11 +265,20 @@ class PermutationGroup:
 
 
 if __name__ == "__main__":
-    print("Z3")
+    # print("Z3")
     z3 = PermutationGroup(set(range(3)), CyclicGroupPermutationFactory)
 
+    print(Permutation({0: 1, 1: 2, 2: 0}, z3).order)
 
+    # order_3_elements: set[Permutation] = set()
 
+    # z3z3z3 = z3.wreath_product(z3).wreath_product(z3)
+    # print(z3z3z3)
+    # for e in tqdm(z3z3z3.elements):
+    #     if e.order == 3:
+    #         order_3_elements.add(e)
+
+    # print(len(order_3_elements))
 
     # print("Z3 wr Z3")
     # z3z3 = z3.wreath_product(z3)
@@ -272,10 +287,7 @@ if __name__ == "__main__":
     #     pass
 
     # print("Z3 wr Z3 wr Z3")
-    # z3z3z3 = z3z3.wreath_product(z3)
     # print(z3z3z3)
-    # for e in tqdm(z3z3z3.elements):
-    #     e.order
 
     # print("Z3 ^ Z3")
     # exponentiation = z3.exponentiation(z3)
