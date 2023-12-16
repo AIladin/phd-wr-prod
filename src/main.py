@@ -1,6 +1,8 @@
+import itertools
 from abc import ABC, abstractmethod
 from functools import cached_property
-from typing import Iterator, Type
+from typing import Collection, Iterator, Type
+from warnings import warn
 
 from frozendict import frozendict
 from rich import print
@@ -26,7 +28,9 @@ class Permutation:
         return repr(self.rule)
 
     def __eq__(self, other) -> bool:
-        if not isinstance(other, Permutation) or (self.group != other.group):
+        if not isinstance(other, Permutation) or (
+            self.group.underlying_set != other.group.underlying_set
+        ):
             raise NotImplementedError
         return self.rule == other.rule
 
@@ -159,6 +163,39 @@ class ExponentiationFactory(PermutationFactory):
         return len(self.all_mappings) * self.group_g.order
 
 
+class GeneratorSetFactory(PermutationFactory):
+    def __init__(
+        self,
+        group: "PermutationGroup",
+        generator_set: Collection[dict],
+    ):
+        warn(
+            (
+                "Current implementation of generator set factory "
+                "uses a lot of memory & doen't stop for infinite group."
+            )
+        )
+        super().__init__(group)
+        self.generator_set = {Permutation(mapping, group) for mapping in generator_set}
+
+    def __iter__(self) -> Iterator[Permutation]:
+        elements = self.generator_set
+
+        while True:
+            new_elements = {
+                x * y for x, y in itertools.product(elements, repeat=2)
+            } | elements
+            if len(new_elements) == len(elements):
+                break
+
+            elements = new_elements
+
+        yield from new_elements
+
+    def __len__(self):
+        raise NotImplementedError
+
+
 class PermutationGroup:
     def __init__(
         self,
@@ -224,30 +261,24 @@ class PermutationGroup:
 if __name__ == "__main__":
     print("Z3")
     z3 = PermutationGroup(set(range(3)), CyclicGroupPermutationFactory)
-    print(z3)
-    for e in tqdm(z3.elements):
-        print(e)
 
-    print("Z3 wr Z3")
-    z3z3 = z3.wreath_product(z3)
-    print(z3z3)
-    for e in tqdm(z3z3.elements):
-        pass
-    # print(z3z3.underlying_set, len(z3z3.permutations))
 
-    print("Z3 wr Z3 wr Z3")
-    z3z3z3 = z3z3.wreath_product(z3)
-    print(z3z3z3)
-    for e in tqdm(z3z3z3.elements):
-        pass
 
-    # print(z3z3z3.underlying_set, len(z3z3z3.permutations))
-    print("Z3 ^ Z3")
-    exponentiation = z3.exponentiation(z3)
-    print(exponentiation)
-    for e in tqdm(exponentiation.elements):
-        pass
-    # print(exponentiation.underlying_set, len(exponentiation.permutations))
 
-    # wr = s3.wreath_product(s3)
-    # print(wr.underlying_set, len(wr.Permutation
+    # print("Z3 wr Z3")
+    # z3z3 = z3.wreath_product(z3)
+    # print(z3z3)
+    # for e in tqdm(z3z3.elements):
+    #     pass
+
+    # print("Z3 wr Z3 wr Z3")
+    # z3z3z3 = z3z3.wreath_product(z3)
+    # print(z3z3z3)
+    # for e in tqdm(z3z3z3.elements):
+    #     e.order
+
+    # print("Z3 ^ Z3")
+    # exponentiation = z3.exponentiation(z3)
+    # print(exponentiation)
+    # for e in tqdm(exponentiation.elements):
+    #     pass
