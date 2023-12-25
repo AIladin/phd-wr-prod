@@ -263,12 +263,47 @@ class PermutationGroup:
     def __repr__(self):
         return f"PermutationGroup(order={self.order})"
 
+    def generating_set(self) -> set[Permutation]:
+        elements = list(self.elements)
+        source_elements = set(elements)
+        min_generating_set = source_elements
+
+        for mask in tqdm(
+            itertools.product((0, 1), repeat=len(elements)), total=2 ** len(elements)
+        ):
+            if not any(mask):
+                continue
+
+            if sum(mask) >= len(min_generating_set):
+                continue
+
+            generaing_set = {
+                p for p, indicator in zip(source_elements, mask) if indicator
+            }
+
+            if len(generaing_set) < len(min_generating_set):
+                new_group = PermutationGroup(
+                    self.underlying_set,
+                    GeneratorSetFactory,
+                    generator_set={p.rule for p in generaing_set},
+                )
+
+                generated_elements = set(new_group.elements)
+
+                if generated_elements == source_elements:
+                    min_generating_set = generaing_set
+                    print(min_generating_set, len(min_generating_set))
+
+        return min_generating_set
+
 
 if __name__ == "__main__":
     # print("Z3")
     z3 = PermutationGroup(set(range(3)), CyclicGroupPermutationFactory)
+    exponentiation = z3.exponentiation(z3)
 
     print(Permutation({0: 1, 1: 2, 2: 0}, z3).order)
+    print(exponentiation.generating_set())
 
     # order_3_elements: set[Permutation] = set()
 
@@ -290,7 +325,8 @@ if __name__ == "__main__":
     # print(z3z3z3)
 
     # print("Z3 ^ Z3")
-    # exponentiation = z3.exponentiation(z3)
+    # exponentiation.generating_set()
+
     # print(exponentiation)
     # for e in tqdm(exponentiation.elements):
     #     pass
