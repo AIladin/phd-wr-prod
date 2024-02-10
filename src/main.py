@@ -302,24 +302,37 @@ if __name__ == "__main__":
     z3 = PermutationGroup(set(range(3)), CyclicGroupPermutationFactory)
     exponentiation = z3.exponentiation(z3)
 
-    print(Permutation({0: 1, 1: 2, 2: 0}, z3).order)
-    print(exponentiation.generating_set())
+    # print(Permutation({0: 1, 1: 2, 2: 0}, z3).order)
+    # print(exponentiation.generating_set())
 
     # order_3_elements: set[Permutation] = set()
 
-    # z3z3z3 = z3.wreath_product(z3).wreath_product(z3)
-    # print(z3z3z3)
+    z3z3z3 = z3.wreath_product(z3).wreath_product(z3)
+    print(z3z3z3)
     # for e in tqdm(z3z3z3.elements):
     #     if e.order == 3:
     #         order_3_elements.add(e)
 
     # print(len(order_3_elements))
 
-    # print("Z3 wr Z3")
-    # z3z3 = z3.wreath_product(z3)
-    # print(z3z3)
-    # for e in tqdm(z3z3.elements):
-    #     pass
+    print("Z3 wr Z3")
+    z3z3 = z3.wreath_product(z3)
+    print(z3z3)
+    for e in tqdm(z3.elements):
+        print(e)
+        break
+
+    for e in tqdm(z3z3.elements):
+        print(e)
+        break
+
+    for e in tqdm(z3z3z3.elements):
+        print(e)
+        break
+
+    for e in exponentiation.elements:
+        print(e)
+        break
 
     # print("Z3 wr Z3 wr Z3")
     # print(z3z3z3)
