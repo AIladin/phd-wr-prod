@@ -114,10 +114,11 @@ if __name__ == "__main__":
         res_host = batch_res.copy_to_host()
 
         if any(res_host):
-            for idx_a in res_host:
+            for idx_a in np.nonzero(res_host)[0]:
+
                 # a = order_3_elements[idx_a]
                 # b = order_3_elements[idx_b]
-                # print(check_conjugation(a, b))
+                # assert check_conjugation(a, b)
                 # print(a.to_frozendict())
                 # print(b.to_frozendict())
 
