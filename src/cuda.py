@@ -7,9 +7,11 @@ from array_based import ArrayWrPermutation
 
 def check_conjugation(a, b):
     inv_a = a.inverse()
-    inv_b = b.inverse()
+    # inv_b = b.inverse()
 
-    return (inv_a * b * a * b) == (inv_b * a * b * a)
+    inv_a_b_a = inv_a * b * a
+
+    return b * inv_a_b_a == inv_a_b_a * b
 
 
 @cuda.jit(device=True)
@@ -42,7 +44,7 @@ def conjugation_kernell(elements, inverse, tmp_x, tmp_y, tmp_z, idx_b, res):
         res[idx_a] = False
         return
 
-    # inv_a * b * a * b
+    # (inv_a b a) -> tmp_y
 
     # inv_a * b -> tmp_x
     mul(inverse[idx_a], elements[idx_b], tmp_x[idx_a])
@@ -50,19 +52,16 @@ def conjugation_kernell(elements, inverse, tmp_x, tmp_y, tmp_z, idx_b, res):
     # tmp_x * a -> tmp_y
     mul(tmp_x[idx_a], elements[idx_a], tmp_y[idx_a])
 
-    # tmp_y * b -> tmp_x
-    mul(tmp_y[idx_a], elements[idx_b], tmp_x[idx_a])
+    # ---
 
-    # inv_b * a * b * a
+    # b * tmp_y -> tmp_x
 
-    # inv_b * a -> tmp_z
-    mul(inverse[idx_b], elements[idx_a], tmp_z[idx_a])
+    mul(elements[idx_b], tmp_y[idx_a], tmp_x[idx_a])
 
-    # tmp_z * b -> tmp_y
-    mul(tmp_z[idx_a], elements[idx_b], tmp_y[idx_a])
+    # tmp_y * b -> tmp_z
+    mul(tmp_y[idx_a], elements[idx_b], tmp_z[idx_a])
 
-    # tmp_y * a -> tmp_z
-    mul(tmp_y[idx_a], elements[idx_a], tmp_z[idx_a])
+    # ---
 
     # tmp_x == tmp_z
     if eq(tmp_x[idx_a], tmp_z[idx_a]):
@@ -79,7 +78,6 @@ if __name__ == "__main__":
 
     arr_elements = cuda.to_device(group[order_3_mask])
     arr_inverse = cuda.to_device(np.stack([e.array for e in order_3_inverse]))
-    res = np.zeros((len(arr_elements), len(arr_elements)), dtype=bool)
 
     tmp_x = cuda.device_array_like(arr_elements)
     tmp_y = cuda.device_array_like(arr_elements)
@@ -89,6 +87,8 @@ if __name__ == "__main__":
         np.zeros(len(arr_elements), dtype=bool),
         copy=False,
     )
+
+    res_indexes = []
 
     print("----Prepared arrays----")
 
@@ -115,15 +115,17 @@ if __name__ == "__main__":
 
         if any(res_host):
             for idx_a in res_host:
-                a = order_3_elements[idx_a]
-                b = order_3_elements[idx_b]
-                print(check_conjugation(a, b))
-                print(a.to_frozendict())
-                print(b.to_frozendict())
+                # a = order_3_elements[idx_a]
+                # b = order_3_elements[idx_b]
+                # print(check_conjugation(a, b))
+                # print(a.to_frozendict())
+                # print(b.to_frozendict())
 
-        res[:, idx_b] = res_host
+                res_indexes.append([idx_a, idx_b])
 
-    np.save("res.npy", res)
+        # res[:, idx_b] = res_host
+
+    np.save("res.npy", np.asarray(res_indexes))
     # x_arr = ArrayWrPermutation(x)
     # y_arr = ArrayWrPermutation(y)
 
