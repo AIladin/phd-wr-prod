@@ -37,37 +37,37 @@ def eq(left, right):
 
 
 @cuda.jit()
-def conjugation_kernell(elements, inverse, tmp_x, tmp_y, tmp_z, idx_b, res):
-    idx_a = cuda.grid(1)
+def conjugation_kernell(elements, inverse, tmp_x, tmp_y, tmp_z, idx_a, res):
+    idx_b = cuda.grid(1)
 
     if idx_a == idx_b:
-        res[idx_a] = False
+        res[idx_b] = False
         return
 
     # (inv_a b a) -> tmp_y
 
     # inv_a * b -> tmp_x
-    mul(inverse[idx_a], elements[idx_b], tmp_x[idx_a])
+    mul(inverse[idx_a], elements[idx_b], tmp_x[idx_b])
 
     # tmp_x * a -> tmp_y
-    mul(tmp_x[idx_a], elements[idx_a], tmp_y[idx_a])
+    mul(tmp_x[idx_b], elements[idx_a], tmp_y[idx_b])
 
     # ---
 
     # b * tmp_y -> tmp_x
 
-    mul(elements[idx_b], tmp_y[idx_a], tmp_x[idx_a])
+    mul(elements[idx_b], tmp_y[idx_b], tmp_x[idx_b])
 
     # tmp_y * b -> tmp_z
-    mul(tmp_y[idx_a], elements[idx_b], tmp_z[idx_a])
+    mul(tmp_y[idx_b], elements[idx_b], tmp_z[idx_b])
 
     # ---
 
     # tmp_x == tmp_z
-    if eq(tmp_x[idx_a], tmp_z[idx_a]):
-        res[idx_a] = True
+    if eq(tmp_x[idx_b], tmp_z[idx_b]):
+        res[idx_b] = True
     else:
-        res[idx_a] = False
+        res[idx_b] = False
 
 
 if __name__ == "__main__":
@@ -107,7 +107,7 @@ if __name__ == "__main__":
             tmp_x,
             tmp_y,
             tmp_z,
-            idx_b,
+            idx_a,
             batch_res,
         )
 
