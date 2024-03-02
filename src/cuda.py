@@ -76,6 +76,8 @@ if __name__ == "__main__":
     order_3_elements = [ArrayWrPermutation(arr) for arr in group[order_3_mask]]
     order_3_inverse = [e.inverse() for e in order_3_elements]
 
+    # theorem_element = 
+
     arr_elements = cuda.to_device(group[order_3_mask])
     arr_inverse = cuda.to_device(np.stack([e.array for e in order_3_inverse]))
 
@@ -88,44 +90,34 @@ if __name__ == "__main__":
         copy=False,
     )
 
-    res_indexes = []
+    # res_indexes = []
 
     print("----Prepared arrays----")
 
-    for idx_b in tqdm(range(len(arr_elements))):
-        threads_per_block = 256
-        blocks_per_grid = (
-            len(arr_elements) + (threads_per_block - 1)
-        ) // threads_per_block
+    # for idx_b in tqdm(range(len(arr_elements))):
+    threads_per_block = 256
+    blocks_per_grid = (len(arr_elements) + (threads_per_block - 1)) // threads_per_block
 
-        conjugation_kernell[
-            blocks_per_grid,
-            threads_per_block,
-        ](
-            arr_elements,
-            arr_inverse,
-            tmp_x,
-            tmp_y,
-            tmp_z,
-            idx_a,
-            batch_res,
-        )
+    conjugation_kernell[
+        blocks_per_grid,
+        threads_per_block,
+    ](
+        arr_elements,
+        arr_inverse,
+        tmp_x,
+        tmp_y,
+        tmp_z,
+        2,
+        batch_res,
+    )
 
-        res_host = batch_res.copy_to_host()
+    res_host = batch_res.copy_to_host()
 
-        if any(res_host):
-            for idx_a in res_host:
-                # a = order_3_elements[idx_a]
-                # b = order_3_elements[idx_b]
-                # print(check_conjugation(a, b))
-                # print(a.to_frozendict())
-                # print(b.to_frozendict())
+    indices_b = np.nonzero(res_host)[0]
 
-                res_indexes.append([idx_a, idx_b])
+    print(len(indices_b))
 
-        # res[:, idx_b] = res_host
-
-    np.save("res.npy", np.asarray(res_indexes))
+    # np.save("res.npy", np.asarray(res_indexes))
     # x_arr = ArrayWrPermutation(x)
     # y_arr = ArrayWrPermutation(y)
 
