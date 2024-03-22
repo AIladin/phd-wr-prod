@@ -113,6 +113,7 @@ class PermutationalWreathProductFactory(PermutationFactory):
             for x in self.group_g.underlying_set
             for y in self.group_h.underlying_set
         }
+        # FIXME check ordering left to right
 
         for h in self.all_mappings:
             for g in self.group_g.element_factory:
@@ -318,21 +319,25 @@ if __name__ == "__main__":
     print("Z3 wr Z3")
     z3z3 = z3.wreath_product(z3)
     print(z3z3)
-    for e in tqdm(z3.elements):
-        print(e)
-        break
+    # for e in tqdm(z3.elements):
+    #     print(e)
+    #     break
 
-    for e in tqdm(z3z3.elements):
-        print(e)
-        break
+    # for e in tqdm(z3z3.elements):
+    #     print(e)
+    #     break
 
-    for e in tqdm(z3z3z3.elements):
-        print(e)
-        break
+    for i, e in enumerate(tqdm(z3z3z3.elements)):
+        # print(e)
+        if i > 10:
+            break
 
-    for e in exponentiation.elements:
-        print(e)
-        break
+    for k,v in e.rule.items():
+        print(f"{k}:{v}")
+
+    # for e in exponentiation.elements:
+    #     print(e)
+    #     break
 
     # print("Z3 wr Z3 wr Z3")
     # print(z3z3z3)
