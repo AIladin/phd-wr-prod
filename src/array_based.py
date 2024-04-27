@@ -5,6 +5,8 @@ import numpy as np
 from frozendict import frozendict
 from joblib import Parallel, delayed
 from tqdm.auto import tqdm
+from typing import Iterable
+import more_itertools
 
 from main import CyclicGroupPermutationFactory, Permutation, PermutationGroup
 
@@ -108,6 +110,14 @@ class ArrayWrPermutation:
             p *= self
             order += 1
         return order
+
+    def fixed_points(self) -> Iterable[tuple[int, ...]]:
+        for x in itertools.product(range(self.domain), repeat=self.wr_order):
+            if x == tuple(self.array[x]):
+                yield x
+
+    def n_fixed_points(self) -> int:
+        return more_itertools.ilen(self.fixed_points())
 
 
 class ArrPermutationGroup:

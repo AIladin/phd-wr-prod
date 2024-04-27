@@ -1,8 +1,17 @@
+from concurrent.futures import ProcessPoolExecutor
+from random import shuffle
+
 import numpy as np
+import pandas as pd
+from joblib import Parallel, delayed
 from numba import cuda, uint8
 from tqdm.auto import tqdm
 
 from array_based import ArrayWrPermutation
+from main import (CyclicGroupPermutationFactory, GeneratorSetFactory,
+                  Permutation, PermutationGroup)
+from ops_debbuger import as_pd
+from portraits import Portrait
 
 
 def check_conjugation(a, b):
@@ -37,96 +46,251 @@ def eq(left, right):
 
 
 @cuda.jit()
-def conjugation_kernell(elements, inverse, tmp_x, tmp_y, tmp_z, idx_b, res):
-    idx_a = cuda.grid(1)
+def conjugation_kernell(
+    elements, inverse, no_fixed_point_mask, tmp_x, tmp_y, tmp_z, idx_a, res
+):
+    idx_b = cuda.grid(1)
 
     if idx_a == idx_b:
-        res[idx_a] = False
+        res[idx_b] = False
+        return
+
+    if not no_fixed_point_mask[idx_b]:
+        res[idx_b] = False
         return
 
     # (inv_a b a) -> tmp_y
 
     # inv_a * b -> tmp_x
-    mul(inverse[idx_a], elements[idx_b], tmp_x[idx_a])
+    mul(inverse[idx_a], elements[idx_b], tmp_x[idx_b])
 
     # tmp_x * a -> tmp_y
-    mul(tmp_x[idx_a], elements[idx_a], tmp_y[idx_a])
+    mul(tmp_x[idx_b], elements[idx_a], tmp_y[idx_b])
 
     # ---
 
     # b * tmp_y -> tmp_x
 
-    mul(elements[idx_b], tmp_y[idx_a], tmp_x[idx_a])
+    mul(elements[idx_b], tmp_y[idx_b], tmp_x[idx_b])
 
     # tmp_y * b -> tmp_z
-    mul(tmp_y[idx_a], elements[idx_b], tmp_z[idx_a])
+    mul(tmp_y[idx_b], elements[idx_b], tmp_z[idx_b])
 
     # ---
 
     # tmp_x == tmp_z
-    if eq(tmp_x[idx_a], tmp_z[idx_a]):
-        res[idx_a] = True
+    if eq(tmp_x[idx_b], tmp_z[idx_b]):
+        res[idx_b] = True
     else:
-        res[idx_a] = False
+        res[idx_b] = False
 
 
 if __name__ == "__main__":
+    z3 = PermutationGroup(set(range(3)), CyclicGroupPermutationFactory)
+    z3z3z3 = z3.wreath_product(z3).wreath_product(z3)
+    alpha = list(z3.elements)
+    alpha = [alpha[-1], alpha[0], alpha[1]]
+
     group = np.load("z3z3z3.npy")
+    inverse_group = np.load("z3z3z3_inverse.npy")
     order_3_mask = np.load("z3z3z3_order_3.npy")
+    # inverse_group = np.stack([ArrayWrPermutation(arr).inverse().array for arr in tqdm(group, "inverse prep")])
+
+    # np.save("z3z3z3_inverse.npy", inverse_group)
+
     order_3_elements = [ArrayWrPermutation(arr) for arr in group[order_3_mask]]
     order_3_inverse = [e.inverse() for e in order_3_elements]
+    no_fixed_points_mask = [a.n_fixed_points() == 0 for a in order_3_elements]
+    fixed3_points_mask = [a.n_fixed_points() == 3 for a in order_3_elements]
+    print("fixed_3_point_mask", sum(fixed3_points_mask))
 
-    arr_elements = cuda.to_device(group[order_3_mask])
-    arr_inverse = cuda.to_device(np.stack([e.array for e in order_3_inverse]))
-
-    tmp_x = cuda.device_array_like(arr_elements)
-    tmp_y = cuda.device_array_like(arr_elements)
-    tmp_z = cuda.device_array_like(arr_elements)
-
-    batch_res = cuda.to_device(
-        np.zeros(len(arr_elements), dtype=bool),
-        copy=False,
+    C3d = Portrait.from_lists(
+        [
+            0,
+            [
+                [2, 1, 0],
+            ],
+            [
+                [0, 0, 0],
+                [0, 0, 0],
+                [2, 1, 0],
+            ],
+        ],
+        alpha,
     )
 
-    res_indexes = []
+    C3d.print_tree()
+
+    # D3d = Portrait.from_lists(
+    #     [
+    #         1,
+    #         [
+    #             [0, 0, 0],
+    #         ],
+    #         [
+    #             [1, 1, 0],
+    #             [0, 0, 0],
+    #             [0, 0, 0],
+    #         ],
+    #     ],
+    #     alpha,
+    # )
+    # D3d.print_tree()
+
+    # d3d_perm = D3d.as_permutation()
+    c3d_perm = C3d.as_permutation()
+
+    # d3d_idx = 492072
+    c3d_idx = 1473992
+    c3d_arr = ArrayWrPermutation(group[c3d_idx])
+    c3d_ord3_idx = order_3_elements.index(c3d_arr)
+    # print(c3d_ord3_idx)
+
+    group_cuda = cuda.to_device(group[order_3_mask])
+    inverse_group_cuda = cuda.to_device(inverse_group[order_3_mask])
+    no_fixed_points_mask = cuda.to_device(no_fixed_points_mask)
+    # arr_inverse = cuda.to_device(np.stack([e.array for e in order_3_inverse]))
+
+    tmp_x = cuda.device_array_like(group_cuda)
+    tmp_y = cuda.device_array_like(group_cuda)
+    tmp_z = cuda.device_array_like(group_cuda)
+
+    batch_res = cuda.to_device(
+        np.zeros(len(group_cuda), dtype=bool),
+        copy=False,
+    )
+    print("order_3 elements", len(order_3_elements))
+    print("no fixed_points check", sum(no_fixed_points_mask))
+
+    # res_indexes = []
 
     print("----Prepared arrays----")
+    res = 0
 
-    for idx_b in tqdm(range(len(arr_elements))):
-        threads_per_block = 256
-        blocks_per_grid = (
-            len(arr_elements) + (threads_per_block - 1)
-        ) // threads_per_block
+    # for idx_a in tqdm(range(len(group_cuda))):
+    threads_per_block = 256
+    blocks_per_grid = (len(group_cuda) + (threads_per_block - 1)) // threads_per_block
 
-        conjugation_kernell[
-            blocks_per_grid,
-            threads_per_block,
-        ](
-            arr_elements,
-            arr_inverse,
-            tmp_x,
-            tmp_y,
-            tmp_z,
-            idx_b,
-            batch_res,
+    conjugation_kernell[
+        blocks_per_grid,
+        threads_per_block,
+    ](
+        group_cuda,
+        inverse_group_cuda,
+        no_fixed_points_mask,
+        tmp_x,
+        tmp_y,
+        tmp_z,
+        c3d_ord3_idx,
+        batch_res,
+    )
+
+    res_host = batch_res.copy_to_host()
+
+    indices_b = np.nonzero(res_host)[0]
+    # res += len(indices_b)
+    print("conj check: ", len(indices_b))
+
+    c_fixed_points = set(c3d_arr.fixed_points())
+    print(c_fixed_points)
+
+    new_b_ids = []
+
+    for idx_b in tqdm(indices_b):
+        b_candidate = order_3_elements[idx_b]
+        valid_b = True
+        for point in c_fixed_points:
+            image = tuple(b_candidate.action(point))
+            if image in c_fixed_points - {point}:
+                valid_b = False
+                break
+        if valid_b:
+            new_b_ids.append(idx_b)
+
+    print("Different cycles check", len(new_b_ids))
+
+    trivial = ArrayWrPermutation.from_dict_permutation(z3z3z3.identity_element)
+
+    idx_b = new_b_ids
+    new_b_ids = []
+    for idx_b in tqdm(indices_b):
+        b_candidate = order_3_elements[idx_b]
+
+        x = b_candidate * (c3d_arr * c3d_arr)
+        x = x * x * x
+
+        if x != trivial:
+            new_b_ids.append(idx_b)
+
+    print("non trivial check", len(new_b_ids))
+
+    def check_group_order(idx) -> int:
+        d = order_3_elements[idx]
+        # assert check_conjugation(c3d_arr, d)
+        test_g = PermutationGroup(
+            z3z3z3.underlying_set,
+            GeneratorSetFactory,
+            generator_set=([c3d_arr.to_frozendict(), d.to_frozendict()]),
         )
 
-        res_host = batch_res.copy_to_host()
+        i = 0
 
-        if any(res_host):
-            for idx_a in np.nonzero(res_host)[0]:
+        for _ in test_g.elements:
+            i += 1
 
-                # a = order_3_elements[idx_a]
-                # b = order_3_elements[idx_b]
-                # assert check_conjugation(a, b)
-                # print(a.to_frozendict())
-                # print(b.to_frozendict())
+        # if i == 81:
+        #     print(idx)
 
-                res_indexes.append([idx_a, idx_b])
+        return idx, i
 
-        # res[:, idx_b] = res_host
+    group_order_check = []
 
-    np.save("res.npy", np.asarray(res_indexes))
+    shuffle(new_b_ids)
+
+    for idx_b, order in tqdm(
+        Parallel(n_jobs=-1)([delayed(check_group_order)(idx_b) for idx_b in new_b_ids])
+    ):
+        if order == 81:
+            group_order_check.append(idx_b)
+        # print(order)
+
+    print("order 81 check", len(group_order_check))
+
+    # if len(indices_b) > 0:
+    # print(indices_b)
+    # print(len(indices_b))
+    # print(len(order_3_elements))
+
+    # c = c3d_arr
+    # d = arr_b
+
+    # records = []
+
+    # with ProcessPoolExecutor(max_workers=2) as executor:
+    # records = list(
+    #     tqdm(map(check_group_order, indices_b), total=len(indices_b)),
+    # )
+
+    # for idx in tqdm(indices_b):
+    #     records.append({"idx_b": idx, "group_order": i})
+
+    #     if i == 81:
+    #         print(idx)
+
+    # pd.DataFrame.from_records(records).to_csv(
+    #     "generated_group_orders.csv",
+    #     index=None,
+    # )
+
+    # cols.append(as_pd(d, "d"))
+    # cols.append(as_pd(c.inverse() * d  * c, "c^{-1}dc"))
+    # cols.append(as_pd((c.inverse() * c.inverse()) * d  * (c * c), "c^{-2}dc^{2}"))
+
+    # res = pd.concat(cols, axis=1)
+    # res.to_csv("b[0]_stuff.csv")
+    # print(len(indices_b))
+
+    # np.save("res.npy", np.asarray(res_indexes))
     # x_arr = ArrayWrPermutation(x)
     # y_arr = ArrayWrPermutation(y)
 
