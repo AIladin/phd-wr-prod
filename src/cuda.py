@@ -1,10 +1,13 @@
+import dbm
 from concurrent.futures import ProcessPoolExecutor
 from random import shuffle
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 from joblib import Parallel, delayed
 from numba import cuda, uint8
+from scipy.sparse import dok_array
 from tqdm.auto import tqdm
 
 from array_based import ArrayWrPermutation
@@ -45,6 +48,39 @@ def eq(left, right):
     return True
 
 
+@cuda.jit(device=True)
+def is_trivial(a):
+    for x in range(3):
+        for y in range(3):
+            for z in range(3):
+                if (a[x, y, z, 0] != x) or (a[x, y, z, 1] != y) or (a[x, y, z, 2] != z):
+                    return False
+
+    return True
+
+
+@cuda.jit(device=True)
+def fixed_point_different_cycles(c, cd):
+    for x in range(3):
+        for y in range(3):
+            for z in range(3):
+                # fixed point check
+                if (
+                    (c[x, y, z, 0] == x)
+                    and (c[x, y, z, 1] == y)
+                    and (c[x, y, z, 2] == z)
+                ):
+                    cd_x, cd_y, cd_z = cd[x, y, z]
+
+                    if (
+                        (c[cd_x, cd_y, cd_z, 0] == cd_x)
+                        and (c[cd_x, cd_y, cd_z, 1] == cd_y)
+                        and (c[cd_x, cd_y, cd_z, 2] == cd_z)
+                    ):
+                        return False
+    return True
+
+
 @cuda.jit()
 def conjugation_kernell(
     elements, inverse, no_fixed_point_mask, tmp_x, tmp_y, tmp_z, idx_a, res
@@ -59,6 +95,7 @@ def conjugation_kernell(
         res[idx_b] = False
         return
 
+    ## --- conj check
     # (inv_a b a) -> tmp_y
 
     # inv_a * b -> tmp_x
@@ -83,6 +120,37 @@ def conjugation_kernell(
         res[idx_b] = True
     else:
         res[idx_b] = False
+        return
+
+    # --- non-trivial check
+
+    # a^2 -> tmp_x
+    mul(elements[idx_a], elements[idx_a], tmp_x[idx_b])
+
+    # ba^2 -> tmp_y
+    mul(elements[idx_b], tmp_x[idx_b], tmp_y[idx_b])
+
+    # (ba^2)^2 -> tmp_z
+    mul(tmp_y[idx_b], tmp_y[idx_b], tmp_z[idx_b])
+
+    # (ba^2)^3 -> tmp_x
+    mul(tmp_y[idx_b], tmp_z[idx_b], tmp_x[idx_b])
+
+    # tmp_x is trivial
+    if is_trivial(tmp_x[idx_b]):
+        res[idx_b] = False
+        return
+    else:
+        res[idx_b] = True
+
+    # --- different cycles check
+
+    # ab -> tmp_x
+    mul(elements[idx_a], elements[idx_b], tmp_x[idx_b])
+    if fixed_point_different_cycles(elements[idx_a], tmp_x[idx_b]):
+        res[idx_b] = True
+    else:
+        res[idx_b] = False
 
 
 if __name__ == "__main__":
@@ -102,24 +170,24 @@ if __name__ == "__main__":
     order_3_inverse = [e.inverse() for e in order_3_elements]
     no_fixed_points_mask = [a.n_fixed_points() == 0 for a in order_3_elements]
     fixed3_points_mask = [a.n_fixed_points() == 3 for a in order_3_elements]
-    print("fixed_3_point_mask", sum(fixed3_points_mask))
+    # print("fixed_3_point_mask", sum(fixed3_points_mask))
 
-    C3d = Portrait.from_lists(
-        [
-            0,
-            [
-                [2, 1, 0],
-            ],
-            [
-                [0, 0, 0],
-                [0, 0, 0],
-                [2, 1, 0],
-            ],
-        ],
-        alpha,
-    )
+    # C3d = Portrait.from_lists(
+    #     [
+    #         0,
+    #         [
+    #             [2, 1, 0],
+    #         ],
+    #         [
+    #             [0, 0, 0],
+    #             [0, 0, 0],
+    #             [2, 1, 0],
+    #         ],
+    #     ],
+    #     alpha,
+    # )
 
-    C3d.print_tree()
+    # C3d.print_tree()
 
     # D3d = Portrait.from_lists(
     #     [
@@ -138,12 +206,12 @@ if __name__ == "__main__":
     # D3d.print_tree()
 
     # d3d_perm = D3d.as_permutation()
-    c3d_perm = C3d.as_permutation()
+    # c3d_perm = C3d.as_permutation()
 
     # d3d_idx = 492072
-    c3d_idx = 1473992
-    c3d_arr = ArrayWrPermutation(group[c3d_idx])
-    c3d_ord3_idx = order_3_elements.index(c3d_arr)
+    # c3d_idx = 1473992
+    # c3d_arr = ArrayWrPermutation(group[c3d_idx])
+    # c3d_ord3_idx = order_3_elements.index(c3d_arr)
     # print(c3d_ord3_idx)
 
     group_cuda = cuda.to_device(group[order_3_mask])
@@ -167,94 +235,119 @@ if __name__ == "__main__":
     print("----Prepared arrays----")
     res = 0
 
-    # for idx_a in tqdm(range(len(group_cuda))):
-    threads_per_block = 256
-    blocks_per_grid = (len(group_cuda) + (threads_per_block - 1)) // threads_per_block
+    # res_matrix = dok_array((len(order_3_mask), len(order_3_mask)), dtype=bool)
 
-    conjugation_kernell[
-        blocks_per_grid,
-        threads_per_block,
-    ](
-        group_cuda,
-        inverse_group_cuda,
-        no_fixed_points_mask,
-        tmp_x,
-        tmp_y,
-        tmp_z,
-        c3d_ord3_idx,
-        batch_res,
+    schema = pa.schema(
+        [
+            pa.field("idx_a", pa.int8()),
+            pa.field("idx_b", pa.int8()),
+        ]
     )
 
-    res_host = batch_res.copy_to_host()
+    # with pa.OSFile("output.feather", "wb") as sink:
+    #     with pa.ipc.new_file(
+    #         sink, schema, options=pa.ipc.IpcWriteOptions(compression="zstd")
+    #     ) as writer:
+    for idx_a in tqdm(range(len(group_cuda))):
+        threads_per_block = 256
+        blocks_per_grid = (
+            len(group_cuda) + (threads_per_block - 1)
+        ) // threads_per_block
 
-    indices_b = np.nonzero(res_host)[0]
-    # res += len(indices_b)
-    print("conj check: ", len(indices_b))
-
-    c_fixed_points = set(c3d_arr.fixed_points())
-    print(c_fixed_points)
-
-    new_b_ids = []
-
-    for idx_b in tqdm(indices_b):
-        b_candidate = order_3_elements[idx_b]
-        valid_b = True
-        for point in c_fixed_points:
-            image = tuple(b_candidate.action(point))
-            if image in c_fixed_points - {point}:
-                valid_b = False
-                break
-        if valid_b:
-            new_b_ids.append(idx_b)
-
-    print("Different cycles check", len(new_b_ids))
-
-    trivial = ArrayWrPermutation.from_dict_permutation(z3z3z3.identity_element)
-
-    idx_b = new_b_ids
-    new_b_ids = []
-    for idx_b in tqdm(indices_b):
-        b_candidate = order_3_elements[idx_b]
-
-        x = b_candidate * (c3d_arr * c3d_arr)
-        x = x * x * x
-
-        if x != trivial:
-            new_b_ids.append(idx_b)
-
-    print("non trivial check", len(new_b_ids))
-
-    def check_group_order(idx) -> int:
-        d = order_3_elements[idx]
-        # assert check_conjugation(c3d_arr, d)
-        test_g = PermutationGroup(
-            z3z3z3.underlying_set,
-            GeneratorSetFactory,
-            generator_set=([c3d_arr.to_frozendict(), d.to_frozendict()]),
+        conjugation_kernell[
+            blocks_per_grid,
+            threads_per_block,
+        ](
+            group_cuda,
+            inverse_group_cuda,
+            no_fixed_points_mask,
+            tmp_x,
+            tmp_y,
+            tmp_z,
+            idx_a,
+            batch_res,
         )
 
-        i = 0
+        res_host = batch_res.copy_to_host()
 
-        for _ in test_g.elements:
-            i += 1
+        indices_b = np.nonzero(res_host)[0]
 
-        # if i == 81:
-        #     print(idx)
+        batch_data = [[idx_a] * len(indices_b), indices_b]
+        writer.write(batch_data)
 
-        return idx, i
+        # res_matrix[idx_a, indices_b] = True
 
-    group_order_check = []
+        # a_arr = order_3_elements[idx_a]
+        # print(len(indices_b))
 
-    shuffle(new_b_ids)
+        # a_fixed_points = set(order_3_elements[idx_a].fixed_points())
+        # print(c_fixed_points)
 
-    for idx_b, order in tqdm(
-        Parallel(n_jobs=-1)([delayed(check_group_order)(idx_b) for idx_b in new_b_ids])
-    ):
-        if order == 81:
-            group_order_check.append(idx_b)
-        # print(order)
+        # new_b_ids = []
 
-    print("order 81 check", len(group_order_check))
+        # for idx_b in indices_b:
+        #     b_candidate = order_3_elements[idx_b]
+        #     valid_b = True
+        #     for point in a_fixed_points:
+        #         image = tuple(b_candidate.action(point))
+        #         if image in a_fixed_points - {point}:
+        #             valid_b = False
+        #             break
+        #     if valid_b:
+        #         new_b_ids.append(idx_b)
+
+        # print("Different cycles check", len(new_b_ids))
+
+        # trivial = ArrayWrPermutation.from_dict_permutation(z3z3z3.identity_element)
+
+        # idx_b = new_b_ids
+        # new_b_ids = []
+        # for idx_b in indices_b:
+        #     b_candidate = order_3_elements[idx_b]
+
+        #     x = b_candidate * (a_arr * a_arr)
+        #     x = x * x * x
+
+        #     if x != trivial:
+        #         new_b_ids.append(idx_b)
+
+        # print(len(new_b_ids))
+
+        # break
+
+    # print("non trivial check", len(new_b_ids))
+
+    # def check_group_order(idx) -> int:
+    #     d = order_3_elements[idx]
+    #     # assert check_conjugation(c3d_arr, d)
+    #     test_g = PermutationGroup(
+    #         z3z3z3.underlying_set,
+    #         GeneratorSetFactory,
+    #         generator_set=([c3d_arr.to_frozendict(), d.to_frozendict()]),
+    #     )
+
+    #     i = 0
+
+    #     for _ in test_g.elements:
+    #         i += 1
+
+    #     # if i == 81:
+    #     #     print(idx)
+
+    #     return idx, i
+
+    # group_order_check = []
+
+    # shuffle(new_b_ids)
+
+    # for idx_b, order in tqdm(
+    #     Parallel(n_jobs=-1)([delayed(check_group_order)(idx_b) for idx_b in new_b_ids])
+    # ):
+    #     if order == 81:
+    #         group_order_check.append(idx_b)
+    #     # print(order)
+
+    # print("order 81 check", len(group_order_check))
 
     # if len(indices_b) > 0:
     # print(indices_b)
