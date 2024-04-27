@@ -3,11 +3,10 @@ from concurrent.futures import ProcessPoolExecutor
 from random import shuffle
 
 import numpy as np
-import pandas as pd
-import pyarrow as pa
-from joblib import Parallel, delayed
+# import pandas as pd
+# from joblib import Parallel, delayed
 from numba import cuda, uint8
-from scipy.sparse import dok_array
+from scipy.sparse import csc_array, dok_array, save_npz
 from tqdm.auto import tqdm
 
 from array_based import ArrayWrPermutation
@@ -172,41 +171,50 @@ if __name__ == "__main__":
     fixed3_points_mask = [a.n_fixed_points() == 3 for a in order_3_elements]
     # print("fixed_3_point_mask", sum(fixed3_points_mask))
 
-    # C3d = Portrait.from_lists(
-    #     [
-    #         0,
-    #         [
-    #             [2, 1, 0],
-    #         ],
-    #         [
-    #             [0, 0, 0],
-    #             [0, 0, 0],
-    #             [2, 1, 0],
-    #         ],
-    #     ],
-    #     alpha,
-    # )
+    C3d = Portrait.from_lists(
+        [
+            0,
+            [
+                [2, 1, 0],
+            ],
+            [
+                [0, 0, 0],
+                [0, 0, 0],
+                [2, 1, 0],
+            ],
+        ],
+        alpha,
+    )
 
     # C3d.print_tree()
 
-    # D3d = Portrait.from_lists(
-    #     [
-    #         1,
-    #         [
-    #             [0, 0, 0],
-    #         ],
-    #         [
-    #             [1, 1, 0],
-    #             [0, 0, 0],
-    #             [0, 0, 0],
-    #         ],
-    #     ],
-    #     alpha,
-    # )
-    # D3d.print_tree()
+    D3d = Portrait.from_lists(
+        [
+            1,
+            [
+                [0, 0, 0],
+            ],
+            [
+                [1, 1, 0],
+                [0, 0, 0],
+                [2, 2, 0],
+            ],
+        ],
+        alpha,
+    )
+    D3d.print_tree()
 
-    # d3d_perm = D3d.as_permutation()
-    # c3d_perm = C3d.as_permutation()
+    d3d_perm = D3d.as_permutation()
+
+    c3d_perm = C3d.as_permutation()
+
+    for i, obj in enumerate(order_3_elements):
+        if obj.to_frozendict() == d3d_perm:
+            print("d3d", i)
+        if obj.to_frozendict() == c3d_perm:
+            print("c3d", i)
+
+    # raise RuntimeError
 
     # d3d_idx = 492072
     # c3d_idx = 1473992
@@ -235,19 +243,9 @@ if __name__ == "__main__":
     print("----Prepared arrays----")
     res = 0
 
-    # res_matrix = dok_array((len(order_3_mask), len(order_3_mask)), dtype=bool)
+    res_matrix = dok_array((len(order_3_elements), len(order_3_elements)), dtype=bool)
 
-    schema = pa.schema(
-        [
-            pa.field("idx_a", pa.int8()),
-            pa.field("idx_b", pa.int8()),
-        ]
-    )
 
-    # with pa.OSFile("output.feather", "wb") as sink:
-    #     with pa.ipc.new_file(
-    #         sink, schema, options=pa.ipc.IpcWriteOptions(compression="zstd")
-    #     ) as writer:
     for idx_a in tqdm(range(len(group_cuda))):
         threads_per_block = 256
         blocks_per_grid = (
@@ -271,49 +269,50 @@ if __name__ == "__main__":
         res_host = batch_res.copy_to_host()
 
         indices_b = np.nonzero(res_host)[0]
+        # res += len(indices_b)
 
-        batch_data = [[idx_a] * len(indices_b), indices_b]
-        writer.write(batch_data)
+        res_matrix[idx_a, indices_b] = True
+    # print(res)
+    save_npz("sparse_res.npz", csc_array(res_matrix))
+    # print(res_matrix)
 
-        # res_matrix[idx_a, indices_b] = True
+    # a_arr = order_3_elements[idx_a]
+    # print(len(indices_b))
 
-        # a_arr = order_3_elements[idx_a]
-        # print(len(indices_b))
+    # a_fixed_points = set(order_3_elements[idx_a].fixed_points())
+    # print(c_fixed_points)
 
-        # a_fixed_points = set(order_3_elements[idx_a].fixed_points())
-        # print(c_fixed_points)
+    # new_b_ids = []
 
-        # new_b_ids = []
+    # for idx_b in indices_b:
+    #     b_candidate = order_3_elements[idx_b]
+    #     valid_b = True
+    #     for point in a_fixed_points:
+    #         image = tuple(b_candidate.action(point))
+    #         if image in a_fixed_points - {point}:
+    #             valid_b = False
+    #             break
+    #     if valid_b:
+    #         new_b_ids.append(idx_b)
 
-        # for idx_b in indices_b:
-        #     b_candidate = order_3_elements[idx_b]
-        #     valid_b = True
-        #     for point in a_fixed_points:
-        #         image = tuple(b_candidate.action(point))
-        #         if image in a_fixed_points - {point}:
-        #             valid_b = False
-        #             break
-        #     if valid_b:
-        #         new_b_ids.append(idx_b)
+    # print("Different cycles check", len(new_b_ids))
 
-        # print("Different cycles check", len(new_b_ids))
+    # trivial = ArrayWrPermutation.from_dict_permutation(z3z3z3.identity_element)
 
-        # trivial = ArrayWrPermutation.from_dict_permutation(z3z3z3.identity_element)
+    # idx_b = new_b_ids
+    # new_b_ids = []
+    # for idx_b in indices_b:
+    #     b_candidate = order_3_elements[idx_b]
 
-        # idx_b = new_b_ids
-        # new_b_ids = []
-        # for idx_b in indices_b:
-        #     b_candidate = order_3_elements[idx_b]
+    #     x = b_candidate * (a_arr * a_arr)
+    #     x = x * x * x
 
-        #     x = b_candidate * (a_arr * a_arr)
-        #     x = x * x * x
+    #     if x != trivial:
+    #         new_b_ids.append(idx_b)
 
-        #     if x != trivial:
-        #         new_b_ids.append(idx_b)
+    # print(len(new_b_ids))
 
-        # print(len(new_b_ids))
-
-        # break
+    # break
 
     # print("non trivial check", len(new_b_ids))
 
