@@ -7,6 +7,7 @@ from warnings import warn
 from frozendict import frozendict
 from rich import print
 from tqdm.auto import tqdm
+import more_itertools
 
 from utils import AllMappings, SizedIterable, safe_unpack
 
@@ -200,7 +201,7 @@ class GeneratorSetFactory(PermutationFactory):
         yield from new_elements
 
     def __len__(self):
-        raise NotImplementedError
+        return more_itertools.ilen(self)
 
 
 class PermutationGroup:

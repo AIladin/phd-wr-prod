@@ -75,12 +75,16 @@ if __name__ == "__main__":
     c = c3d_array
 
     d = d3d_array
-    d = d * c * c
-    print(d.order(ArrayWrPermutation.from_dict_permutation(z3z3z3.identity_element)))
+    # d = d * c * c
+    # print(d.order(ArrayWrPermutation.from_dict_permutation(z3z3z3.identity_element)))
 
-    # x1 = c.inverse()
-    # x2 = x1 * d
-    # x3 = x2 * c
-    # x4 = d * x3
-    # x5 = x3 * c
+    x1 = c.inverse()
+    x2 = x1 * d
+    x3 = x2 * c
+    x4 = d * x3
+    x5 = x3 * c
+
+    print(x4 == x5)
+
+    
     # print(pd.concat([as_pd(x4, "x4"), as_pd(x5, "x5"),], axis=1).to_markdown())

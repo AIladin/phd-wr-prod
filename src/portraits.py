@@ -4,7 +4,18 @@ from collections import deque
 from frozendict import frozendict
 from tqdm.auto import tqdm
 
-from main import CyclicGroupPermutationFactory, Permutation, PermutationGroup
+from main import (CyclicGroupPermutationFactory, GeneratorSetFactory,
+                  Permutation, PermutationGroup)
+from array_based import ArrayWrPermutation
+
+
+def check_conjugation(a, b):
+    inv_a = a.inverse()
+    # inv_b = b.inverse()
+
+    inv_a_b_a = inv_a * b * a
+
+    return b * inv_a_b_a == inv_a_b_a * b
 
 
 class Portrait:
@@ -155,9 +166,9 @@ if __name__ == "__main__":
         alpha,
     )
     # C3d.print_tree()
-    c3d_perm = C3d.as_permutation()
+    c3d_perm = Permutation(C3d.as_permutation(), z3z3z3)
 
-    D3d = Portrait.from_lists(
+    D_new = Portrait.from_lists(
         [
             1,
             [
@@ -166,13 +177,14 @@ if __name__ == "__main__":
             [
                 [1, 1, 0],
                 [0, 0, 0],
-                [0, 0, 0],
+                [2, 2, 0],
             ],
         ],
         alpha,
     )
-    d3d_perm = D3d.as_permutation()
-    # D3d.print_tree()
+    d_new_perm = Permutation(D_new.as_permutation(), z3z3z3)
+    D_new.print_tree()
+    print(d_new_perm.order)
 
     # p = Portrait.from_lists(
     #     [
@@ -197,18 +209,28 @@ if __name__ == "__main__":
     # for k,v in e.rule.items():
     #     print(f"{k}:{v}")
 
-    # for element in tqdm(z3z3z3.elements):
-    #     if c3d_perm == element.rule:
-    #         print("Found c3d in z3z3z3")
+    # for i, element in enumerate(tqdm(z3z3z3.elements)):
+    #     if d_new_perm == element:
+    #         print(f"Found d_new in z3z3z3: {i}")
     #         break
-    for i, element in enumerate(tqdm(z3z3z3.elements)):
-        if c3d_perm == element.rule:
-            print("Found d3d in z3z3z3")
-            break
+    # for i, element in enumerate(tqdm(z3z3z3.elements)):
+    #     if c3d_perm == element.rule:
+    #         print("Found d3d in z3z3z3")
+    #         break
 
-    print(element.order)
-    print(i)
+    # print(element.order)
+    # print(i)
 
+    # print(check_conjugation(c3d_perm, d_new_perm))
 
+    test_g = PermutationGroup(
+        z3z3z3.underlying_set,
+        GeneratorSetFactory,
+        generator_set=([c3d_perm.rule, d_new_perm.rule]),
+    )
+    print(len(test_g.elements))
+
+    print(ArrayWrPermutation.from_dict_permutation(c3d_perm).n_fixed_points())
+    print(ArrayWrPermutation.from_dict_permutation(d_new_perm).n_fixed_points())
 
     # print("--------")
