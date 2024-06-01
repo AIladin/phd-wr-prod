@@ -8,7 +8,7 @@ from tqdm.auto import tqdm
 from typing import Iterable
 import more_itertools
 
-from main import CyclicGroupPermutationFactory, Permutation, PermutationGroup
+from wrepy.main import CyclicGroupPermutationFactory, Permutation, PermutationGroup
 
 
 class ArrayWrPermutation:

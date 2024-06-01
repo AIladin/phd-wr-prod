@@ -1,0 +1,4 @@
+frozendict==2.3.10
+more_itertools==10.2.0
+rich==13.7.1
+tqdm==4.66.1

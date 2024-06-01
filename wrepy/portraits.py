@@ -4,9 +4,9 @@ from collections import deque
 from frozendict import frozendict
 from tqdm.auto import tqdm
 
-from main import (CyclicGroupPermutationFactory, GeneratorSetFactory,
+from wrepy.main import (CyclicGroupPermutationFactory, GeneratorSetFactory,
                   Permutation, PermutationGroup)
-from array_based import ArrayWrPermutation
+# from array_based import ArrayWrPermutation
 
 
 def check_conjugation(a, b):
@@ -230,7 +230,7 @@ if __name__ == "__main__":
     )
     print(len(test_g.elements))
 
-    print(ArrayWrPermutation.from_dict_permutation(c3d_perm).n_fixed_points())
-    print(ArrayWrPermutation.from_dict_permutation(d_new_perm).n_fixed_points())
+    # print(ArrayWrPermutation.from_dict_permutation(c3d_perm).n_fixed_points())
+    # print(ArrayWrPermutation.from_dict_permutation(d_new_perm).n_fixed_points())
 
     # print("--------")
