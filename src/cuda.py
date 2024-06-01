@@ -82,9 +82,13 @@ def fixed_point_different_cycles(c, cd):
 
 @cuda.jit()
 def conjugation_kernell(
-    elements, inverse, no_fixed_point_mask, tmp_x, tmp_y, tmp_z, idx_a, res
+    elements, inverse, no_fixed_point_mask, fixed_3_points_mask, tmp_x, tmp_y, tmp_z, idx_a, res
 ):
     idx_b = cuda.grid(1)
+
+    if not fixed_3_points_mask[idx_a]:
+        res[idx_b] = False
+        return
 
     if idx_a == idx_b:
         res[idx_b] = False
@@ -168,7 +172,7 @@ if __name__ == "__main__":
     order_3_elements = [ArrayWrPermutation(arr) for arr in group[order_3_mask]]
     order_3_inverse = [e.inverse() for e in order_3_elements]
     no_fixed_points_mask = [a.n_fixed_points() == 0 for a in order_3_elements]
-    fixed3_points_mask = [a.n_fixed_points() == 3 for a in order_3_elements]
+    fixed_3_points_mask = [a.n_fixed_points() == 3 for a in order_3_elements]
     # print("fixed_3_point_mask", sum(fixed3_points_mask))
 
     C3d = Portrait.from_lists(
@@ -225,6 +229,8 @@ if __name__ == "__main__":
     group_cuda = cuda.to_device(group[order_3_mask])
     inverse_group_cuda = cuda.to_device(inverse_group[order_3_mask])
     no_fixed_points_mask = cuda.to_device(no_fixed_points_mask)
+    fixed_3_points_mask  = cuda.to_device(fixed_3_points_mask)
+
     # arr_inverse = cuda.to_device(np.stack([e.array for e in order_3_inverse]))
 
     tmp_x = cuda.device_array_like(group_cuda)
@@ -259,6 +265,7 @@ if __name__ == "__main__":
             group_cuda,
             inverse_group_cuda,
             no_fixed_points_mask,
+            fixed_3_points_mask,
             tmp_x,
             tmp_y,
             tmp_z,
