@@ -8,7 +8,7 @@ A python pacakge for accelerated operations with elements of permutational wreat
 
 ## Demo
 
-A colab nonebook with demo for $\mathbf{Z}_3 \wr \mathbf{Z}_3 \wr \mathbf{Z}$ is avaliable [here](https://github.com/AIladin/phd-wr-prod/blob/main/notebooks/demo_notebook.ipynb).
+A colab nonebook with demo for $\mathbf{Z}_3 \wr \mathbf{Z}_3 \wr \mathbf{Z}_3$ is avaliable [here](https://github.com/AIladin/phd-wr-prod/blob/main/notebooks/demo_notebook.ipynb).
 
 ## Installation
 
