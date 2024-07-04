@@ -4,12 +4,21 @@ from functools import cached_property
 from typing import Collection, Iterator, Type
 from warnings import warn
 
+import more_itertools
 from frozendict import frozendict
 from rich import print
 from tqdm.auto import tqdm
-import more_itertools
 
-from utils import AllMappings, SizedIterable, safe_unpack
+from wrepy.utils import AllMappings, SizedIterable, safe_unpack
+
+__all__ = [
+    "Permutation",
+    "CyclicGroupPermutationFactory",
+    # "PermutationalWreathProductFactory",
+    # "ExponentiationFactory",
+    "GeneratorSetFactory",
+    "PermutationGroup",
+]
 
 
 class Permutation:
@@ -52,6 +61,13 @@ class Permutation:
             p *= self
             order += 1
         return order
+
+    def fixed_points(self) -> list[tuple]:
+        res = []
+        for k, v in self.rule.items():
+            if k == v:
+                res.append(k)
+        return res
 
 
 class PermutationFactory(ABC):
@@ -333,7 +349,7 @@ if __name__ == "__main__":
         if i > 10:
             break
 
-    for k,v in e.rule.items():
+    for k, v in e.rule.items():
         print(f"{k}:{v}")
 
     # for e in exponentiation.elements:

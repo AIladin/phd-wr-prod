@@ -1,0 +1,17 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+[project]
+name = "wrepy"
+version = "0.0.2"
+dependencies = [
+  "frozendict",
+  "more_itertools",
+  "rich",
+  "tqdm",
+  "numpy",
+  "scipy",
+  "more_itertools",
+  "numba",
+]
+requires-python = ">=3.10"

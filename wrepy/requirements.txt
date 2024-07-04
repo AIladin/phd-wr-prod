@@ -1,0 +1,5 @@
+frozendict
+more_itertools
+rich
+tqdm
+numba
