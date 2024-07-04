@@ -16,7 +16,7 @@ A colab nonebook with demo for $\mathbf{Z}_3 \wr \mathbf{Z}_3 \wr \mathbf{Z}$ is
 
 1. Follow the [installation guide](https://numba.readthedocs.io/en/stable/user/installing.html) for cuda enabled numba. 
 
-2. Intall the package
+2. Install the package
   ```
   pip install git+https://github.com/AIladin/phd-wr-prod.git
   ```
