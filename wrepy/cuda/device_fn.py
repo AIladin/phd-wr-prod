@@ -102,6 +102,15 @@ def copy_portrait(source, target):
         target[i] = source[i]
 
 
+@cuda.jit(numba.bool_(numba.int8[:], numba.int8[:]), device=True)
+def eq_portrait(source, target):
+    for i in range(len(source)):
+        if target[i] != source[i]:
+            return False
+
+    return True
+
+
 @cuda.jit(
     numba.int64(
         numba.int8[:],
@@ -176,6 +185,28 @@ def portait_inverse(
 
 
 @cuda.jit(
+    numba.bool_(
+        numba.int8[:],
+        numba.int8[:],
+        numba.int8[:],
+    ),
+    device=True,
+)
+def is_fixed_point(arities, portrait_x, point):
+    node_x = 0
+
+    for level in range(len(arities)):
+        x_result = (point[level] + portrait_x[node_x]) % arities[level]
+
+        if x_result != point[level]:
+            return False
+
+        node_x = get_child_idx(arities, node_x, point[level])
+
+    return True
+
+
+@cuda.jit(
     numba.int64(
         numba.int8[:],
         numba.int8[:],
@@ -191,21 +222,33 @@ def get_n_fixed(
     n_points = 0
 
     for point in all_points:
-        node_x = 0
-        result_node = 0
-        valid_point = True
-
-        for level in range(len(arities)):
-            x_result = (point[level] + portrait_x[node_x]) % arities[level]
-
-            if x_result != point[level]:
-                valid_point = False
-                break
-
-            node_x = get_child_idx(arities, node_x, point[level])
-            result_node = get_child_idx(arities, result_node, point[level])
-
-        if valid_point:
+        if is_fixed_point(arities, portrait_x, point):
             n_points += 1
 
     return n_points
+
+
+@cuda.jit(
+    numba.int64(
+        numba.int8[:],
+        numba.int8[:],
+        numba.int8[:],
+        numba.int8[:],
+    ),
+    device=True,
+)
+def equal_action(arities, portrait_x, portrait_y, point):
+    node_x = 0
+    node_y = 0
+
+    for level in range(len(arities)):
+        x_result = (point[level] + portrait_x[node_x]) % arities[level]
+        y_result = (point[level] + portrait_x[node_y]) % arities[level]
+
+        if x_result != y_result:
+            return False
+
+        node_x = get_child_idx(arities, node_x, point[level])
+        node_y = get_child_idx(arities, node_y, point[level])
+
+    return True

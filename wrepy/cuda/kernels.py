@@ -113,3 +113,29 @@ def inverse_kernel(
         result[portrait_idx],
         all_points,
     )
+
+
+@cuda.jit(
+    numba.void(
+        numba.int8[:],
+        numba.int8[:, :],
+        numba.int8[:, :],
+        numba.int64[:],
+    )
+)
+def n_fixed_points_kernel(
+    arities,
+    portraits_x,
+    all_points,
+    n_fixed_points,
+):
+    portrait_idx = cuda.grid(1)
+
+    if portrait_idx >= len(portraits_x):
+        return
+
+    n_fixed_points[portrait_idx] = device_fn.get_n_fixed(
+        arities,
+        portraits_x[portrait_idx],
+        all_points,
+    )
